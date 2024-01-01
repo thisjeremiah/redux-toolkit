@@ -915,12 +915,12 @@ export function buildHooks<Definitions extends EndpointDefinitions>({
               (_: ApiRootState, lastResult: any) => lastResult,
               (_: ApiRootState) => stableArg,
             ],
-            queryStatePreSelector
-            // {
-            // memoizeOptions: {
-            // resultEqualityCheck: shallowEqual,
-            // },
-            // }
+            queryStatePreSelector,
+            {
+              memoizeOptions: {
+                resultEqualityCheck: shallowEqual,
+              },
+            }
           ),
         [select, stableArg]
       )
