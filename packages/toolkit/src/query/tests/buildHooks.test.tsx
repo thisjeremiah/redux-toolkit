@@ -39,6 +39,7 @@ import { createListenerMiddleware, configureStore } from '@reduxjs/toolkit'
 import { delay } from '../../utils'
 import type { SubscriptionSelectors } from '../core/buildMiddleware/types'
 import { countObjectKeys } from '../utils/countObjectKeys'
+import { useSelector } from 'react-redux'
 
 // Just setup a temporary in-memory counter for tests that `getIncrementedAmount`.
 // This can be used to test how many renders happen due to data changes or
@@ -2052,7 +2053,21 @@ describe('hooks with createApi defaults set', () => {
       }),
     })
 
-    const storeRef = setupApiStore(api)
+    const counterReducer = {
+      counter: (
+        state: { count: number } = { count: 0 },
+        action: UnknownAction
+      ) => {
+        if (action.type === 'INCREMENT_COUNT') {
+          return {
+            count: state.count + 1,
+          }
+        }
+        return state
+      },
+    }
+
+    const storeRef = setupApiStore(api, { ...counterReducer })
 
     expectExactType(api.useGetPostsQuery)(api.endpoints.getPosts.useQuery)
     expectExactType(api.useUpdatePostMutation)(
@@ -2240,6 +2255,56 @@ describe('hooks with createApi defaults set', () => {
       fireEvent.click(addBtn)
       fireEvent.click(addBtn)
       await waitFor(() => expect(getRenderCount()).toBe(2))
+    })
+
+    test('useQuery with selectFromResult option only updates when the underlying data changes', async () => {
+      function Posts() {
+        const { posts } = api.endpoints.getPosts.useQuery(undefined, {
+          selectFromResult: ({ data }) => ({
+            // Intentionally use an unstable reference to force a rerender
+            posts: data?.filter((post) => post.name.includes('post')),
+          }),
+        })
+
+        getRenderCount = useRenderCounter()
+
+        return (
+          <div>
+            {posts?.map((post) => (
+              <div key={post.id}>{post.name}</div>
+            ))}
+          </div>
+        )
+      }
+
+      function CounterButton() {
+        return (
+          <div
+            data-testid="incrementButton"
+            onClick={() => storeRef.store.dispatch({ type: 'INCREMENT_COUNT' })}
+          >
+            Increment Count
+          </div>
+        )
+      }
+
+      render(
+        <div>
+          <Posts />
+          <CounterButton />
+        </div>,
+        { wrapper: storeRef.wrapper }
+      )
+
+      await delay(1)
+      const incrementBtn = screen.getByTestId('incrementButton')
+      fireEvent.click(incrementBtn)
+      await delay(1)
+      fireEvent.click(incrementBtn)
+      await delay(1)
+      fireEvent.click(incrementBtn)
+      await delay(1)
+      expect(getRenderCount()).toBe(2)
     })
 
     test('useQuery with selectFromResult option serves a deeply memoized value, then ONLY updates when the underlying data changes', async () => {
